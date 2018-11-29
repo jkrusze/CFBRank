@@ -25,10 +25,6 @@ while running:
     option = int(input('Select Option Now:   '))
 ##################################################################################
     if option == 1:
-        print('1: Wins/Losses (all teams)')
-        print('2: Game Stats (single team)')
-        print('3: Game Stats (single team)')
-        dataType_opt1 = int(input('Select Option Now:   '))
         if os.path.exists(DataFile):
             print('### Replacing old file','\n')
             os.remove(DataFile)
@@ -67,7 +63,6 @@ while running:
             print('### Error: Data must be parsed before performing operations!','\n')
         else:
             TeamName_opt3 = str(input('Enter Team Name:  '))
-            statType_opt3 = str(input('Which stat?  '))
             print('##########################','\n')
             for opt3_tmp1 in ParsedGameData:
                 home_team = opt3_tmp1.get("home_team")
