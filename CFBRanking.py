@@ -48,7 +48,7 @@ def parse_data(data_type):
 #            pp.pprint(read_tmp3)
             return ParsedGameData
 ##################################################################################
-def get_season_avg(selected_team):
+def get_season_avg(selected_team, ParsedGameData):
     s_stats = [0] * 18
     opponent_list = [str('--')] * 18
     tmp6=0
@@ -61,9 +61,8 @@ def get_season_avg(selected_team):
                 FBS_team=False
         if FBS_team:
             for tmp3 in tmp2:
-                print('win #',s_stats[1])
-                s_stats[1]=s_stats[1]+1
                 if tmp3['school'] == selected_team:
+                    s_stats[1]=s_stats[1]+1
                     tmp4=tmp3['stats']
                     s_stats[2]=s_stats[2]+tmp3['points']
                     for tmp5 in tmp4:
@@ -155,7 +154,7 @@ while running:
         selected_team = str(input('Enter Team Name:  '))
         get_data(2,selected_team)
         ParsedGameData = parse_data(2)
-        s_stats, opp_list = get_season_avg(selected_team)
+        s_stats, opp_list = get_season_avg(selected_team,ParsedGameData)
 
         print('\n')
         print('##########################','\n')
@@ -175,21 +174,20 @@ while running:
         selected_team = str(input('Enter Team Name:  '))
         get_data(2,selected_team)
         ParsedGameData = parse_data(2)
-        s_stats, opp_list = get_season_avg(selected_team)
-        opp_stats = numpy.zeros((18,s_stats[1]))
-        print('s_Stats[1]=',s_stats[0])
-        for x in range(0,s_stats[0]):
+        s_stats, opp_list = get_season_avg(selected_team, ParsedGameData)
+        opp_stats = numpy.zeros((15,18))
+        print('s_Stats[1]=',s_stats[1])
+        for x in range(0,s_stats[1]):
             if opp_list[x] != '--':
-                print(x)
-                print(opp_list[x])
                 selected_team = opp_list[x]
                 get_data(2,selected_team)
-                ParsedGameData = parse_data
+                ParsedGameData = parse_data(2)
+                os_stats, o_opp_list = get_season_avg(selected_team, ParsedGameData)
+                opp_stats[x] = os_stats
             else:
                 print("They ain't playyyd nobodyyy PAWWWELLL")
-                # opp_stats[x], opp_opp_list = get_season_avg(selected_team)
-        #print(opp_stats)
 
+#        print(opp_stats)
 
 
 
