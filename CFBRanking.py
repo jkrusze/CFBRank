@@ -5,6 +5,7 @@ import json
 import pprint
 import numpy
 import csv
+import time
 ##################################################################################
 ##################################################################################
 ################                     FUNCTIONS                   #################
@@ -58,6 +59,7 @@ def parse_data(data_type):
             return ParsedGameData
 ##################################################################################
 def get_season_avg(selected_team, ParsedGameData):
+#
     s_stats = [0] * 21
     opponent_list = [str('--')] * 21
     tmp6=0
@@ -133,6 +135,7 @@ def get_opp_adj_data(selected_team):
 #   The second step requires weighing the yards per pass/rush attempt by the number
 #   plays a team runs that is passing/rushing.
 #
+    opp_adj_data = [0] * 7
     if (print_get_data == 1):
         print('Selected team = ',selected_team)
     get_data(2,selected_team)
@@ -163,16 +166,44 @@ def get_opp_adj_data(selected_team):
     fra_att_p = s_stats[20] / tot_att  # fraction of plays which are passing
     pts_p_a = (s_stats[2])/((s_stats[8]*fra_att_r+s_stats[12]*fra_att_p)) # points per attempt/yard.
 #
-    return s_stats, aoyppa, aoypra,  fra_att_r, fra_att_p, pts_p_a
+    opp_adj_data[1] = aoyppa
+    opp_adj_data[2] = aoypra
+    opp_adj_data[3] = tot_att
+    opp_adj_data[4] = fra_att_r
+    opp_adj_data[5] = fra_att_p
+    opp_adj_data[6] = pts_p_a
+
+    return s_stats, opp_adj_data
 
 ##################################################################################
-def team_matchup(selected_team1,selected_team2):
+def team_matchup(selected_team1,selected_team2, *args):
 # This function calcualtes the matchup between two teams. It takes in the
 # season average defenses for pass and rush (%) and weigth's the
 # opponent's offense against it.
 #
-        s_stats1, aoyppa1, aoypra1, fra_att_r_1, fra_att_p_1,  pts_p_a1 = get_opp_adj_data(selected_team1)
-        s_stats2, aoyppa2, aoypra2, fra_att_r_2, fra_att_p_2,  pts_p_a2 = get_opp_adj_data(selected_team2)
+        which_option = args[0]
+        team_matchup_data = [0] * 17
+        if (which_option == 1):
+            s_stats1, opp_adj_data1 = get_opp_adj_data(selected_team1)
+        else:
+            s_stats1 = args[1]
+            opp_adj_data1 = args[2]
+        s_stats2, opp_adj_data2 = get_opp_adj_data(selected_team2)
+#
+        aoyppa1 = opp_adj_data1[1]
+        aoypra1 = opp_adj_data1[2]
+        tot_att1 = opp_adj_data1[3]
+        fra_att_r_1 = opp_adj_data1[4]
+        fra_att_p_1 = opp_adj_data1[5]
+        pts_p_a1 = opp_adj_data1[6]
+
+        aoyppa2 = opp_adj_data2[1]
+        aoypra2 = opp_adj_data2[2]
+        tot_att2 = opp_adj_data2[3]
+        fra_att_r_2 = opp_adj_data2[4]
+        fra_att_p_2 = opp_adj_data2[5]
+        pts_p_a2 = opp_adj_data2[6]
+
 #
         frac_ra1 = ((s_stats1[9]/s_stats1[1])/aoypra1)  # Rush defense, team 1
         frac_pa1 = ((s_stats1[13]/s_stats1[1])/aoyppa1) # Pass defense, team 1
@@ -188,9 +219,76 @@ def team_matchup(selected_team1,selected_team2):
         pred_ypplay2 = pred_ypra2 * fra_att_r_2 + pred_yppa2 * fra_att_p_2
         pred_pts1 = pred_ypplay1 * pts_p_a1
         pred_pts2 = pred_ypplay2 * pts_p_a2
+#
+        team_matchup_data[1] = aoyppa1
+        team_matchup_data[2] = aoypra1
+        team_matchup_data[3] = fra_att_r_1
+        team_matchup_data[4] = fra_att_p_1
+        team_matchup_data[5] = aoyppa2
+        team_matchup_data[6] = aoypra2
+        team_matchup_data[7] = fra_att_r_2
+        team_matchup_data[8] = fra_att_p_2
+        team_matchup_data[9] = pred_yppa1
+        team_matchup_data[10] = pred_ypra1
+        team_matchup_data[11] = pred_yppa2
+        team_matchup_data[12] = pred_ypra2
+        team_matchup_data[13] = pred_ypplay1
+        team_matchup_data[14] = pred_ypplay2
+        team_matchup_data[15] = pred_pts1
+        team_matchup_data[16] = pred_pts2
 
-        return s_stats1, s_stats2, aoyppa1, aoypra1, aoyppa2, aoypra2, pred_yppa1, pred_ypra1, pred_yppa2, pred_ypra2, pred_ypplay1, pred_ypplay2, pred_pts1, pred_pts2
 
+        return s_stats1, s_stats2, opp_adj_data1, opp_adj_data2, team_matchup_data
+##################################################################################
+def team_season_pred(selected_team1, *args):
+        pred_season_data = [0] * 5
+#       read list of FBS teams from file
+        with open('ListOfFBSSchools.csv', 'r') as FBSFile:
+            reader = csv.reader(FBSFile)
+            FBSList = list(reader)
+# Convert to list of strings
+        FBSList = list(map(''.join,FBSList))
+#
+        pts_for_tot = 0
+        pts_aga_tot = 0
+        tot_wins = 0
+        count = 0
+        if (args[0] ==1):
+            s_stats1, opp_adj_data1 = get_opp_adj_data(selected_team1)
+        for opponent in FBSList:
+            count = count + 1
+            if (count == 1):
+                print ('Now Doing Team',count,'/130')
+                print ('team:', selected_team1,'opponent:',opponent)
+                if (selected_team1 != opponent):
+                    s_stats1, s_stats2, opp_adj_data1, opp_adj_data2, team_matchup_data = team_matchup(selected_team1,opponent, 1)
+                    pred_pts1     =     team_matchup_data[15]
+                    pred_pts2     =     team_matchup_data[16]
+                    pts_for_tot = pred_pts1 + pts_for_tot
+                    pts_aga_tot = pred_pts2 + pts_aga_tot
+                    if (pred_pts1 > pred_pts2):
+                        tot_wins = tot_wins+1
+                else:
+                    print('Skipping:', opponent)
+            else:
+                print ('Now Doing Team',count,'/130')
+                if (selected_team1 != opponent):
+                    s_stats1, s_stats2, opp_adj_data1, opp_adj_data2, team_matchup_data = team_matchup(selected_team1,opponent, 2, s_stats1, opp_adj_data1)
+                    pred_pts1     =     team_matchup_data[15]
+                    pred_pts2     =     team_matchup_data[16]
+                    pts_for_tot = pred_pts1 + pts_for_tot
+                    pts_aga_tot = pred_pts2 + pts_aga_tot
+                    if (pred_pts1 > pred_pts2):
+                        tot_wins = tot_wins+1
+                else:
+                    print('Skipping:', opponent)
+#
+        pred_season_data[0] = tot_wins
+        pred_season_data[1] = pts_for_tot
+        pred_season_data[2] = pts_aga_tot
+
+
+        return pred_season_data
 ##################################################################################
 # Set data file
 now = datetime.datetime.now()
@@ -210,6 +308,7 @@ while running:
     print('4: Get Opponent-Adjusted Stats')
     print('5: Match Up Two Teams')
     print('6: Get Wins Predictions for a Team')
+    print('7: Get Team Rankings')
     print('99: Exit')
     print('##########################','\n')
     option = int(input('Select Option Now:   '))
@@ -271,7 +370,14 @@ while running:
     if option == 4:
         selected_team4 = str(input('Enter Team Name:  '))
 
-        s_stats, aoyppa, aoypra, fra_att_r, fra_att,  pts_p_a = get_opp_adj_data(selected_team4)
+        s_stats, opp_adj_data = get_opp_adj_data(selected_team4)
+        aoyppa = opp_adj_data[1]
+        aoypra = opp_adj_data[2]
+        tot_att = opp_adj_data[3]
+        fra_att_r = opp_adj_data[4]
+        fra_att_p = opp_adj_data[5]
+        pts_p_a = opp_adj_data[6]
+
 
         print('Passing Allowed % =',round((s_stats[13]*100/s_stats[1])/aoyppa,3))
         print('Rushing Allowed % =',round((s_stats[9]*100/s_stats[1])/aoypra,3))
@@ -282,11 +388,28 @@ while running:
 
     if option == 5:
 
-        selected_team1 = str(input('Enter Name of Team 1 :  '))
         print('\n')
+        selected_team1 = str(input('Enter Name of Team 1 :  '))
         selected_team2 = str(input('Enter Name of Team 2 :  '))
 
-        s_stats1, s_stats2, aoyppa1, aoypra1, aoyppa2, aoypra2, pred_yppa1, pred_ypra1, pred_yppa2, pred_ypra2, pred_ypplay1, pred_ypplay2, pred_pts1, pred_pts2 = team_matchup(selected_team1,selected_team2)
+        s_stats1, s_stats2, opp_adj_data1, opp_adj_data2, team_matchup_data = team_matchup(selected_team1,selected_team2,1)
+        aoyppa1       =      team_matchup_data[1]
+        aoypra1       =      team_matchup_data[2]
+        fra_att_r_1   =      team_matchup_data[3]
+        fra_att_p_1   =      team_matchup_data[4]
+        aoyppa2       =      team_matchup_data[5]
+        aoypra2       =      team_matchup_data[6]
+        fra_att_r_2   =      team_matchup_data[7]
+        fra_att_p_2   =      team_matchup_data[8]
+        pred_yppa1    =      team_matchup_data[9]
+        pred_ypra1    =     team_matchup_data[10]
+        pred_yppa2    =     team_matchup_data[11]
+        pred_ypra2    =     team_matchup_data[12]
+        pred_ypplay1  =     team_matchup_data[13]
+        pred_ypplay2  =     team_matchup_data[14]
+        pred_pts1     =     team_matchup_data[15]
+        pred_pts2     =     team_matchup_data[16]
+
 
         print('\n')
         print('\n')
@@ -312,8 +435,29 @@ while running:
 ##################################################################################
 
     if option == 6:
+        tstart = time.time()
         selected_team1 = str(input('Enter Name of the Team  :  '))
         print_get_data = int(input('Print Intermediate Output? 1 = yes, 0 = no  :  '))
+
+        pred_season_data = team_season_pred(selected_team1, 0)
+
+        tot_wins = pred_season_data[0]
+        pts_for_tot = pred_season_data[1]
+        pts_aga_tot = pred_season_data[2]
+
+        print('Total points for:', pts_for_tot)
+        print('Total points against:', pts_aga_tot)
+        print('Total wins:', tot_wins,'out of',129)
+        tend = time.time()
+        print('Time elapsed:',tend - tstart)
+
+
+##################################################################################
+    if option == 7:
+        rankings = numpy.zeros( (130, 3) )
+        tstart = time.time()
+        print_get_data = 1
+#
 #       read list of FBS teams from file
         with open('ListOfFBSSchools.csv', 'r') as FBSFile:
             reader = csv.reader(FBSFile)
@@ -325,25 +469,19 @@ while running:
         pts_aga_tot = 0
         tot_wins = 0
         count = 0
-        for opponent in FBSList:
-            count = count + 1
-            print ('Now Doing Team',count,'/130')
-            if (selected_team1 != opponent):
-                s_stats1, s_stats2, aoyppa1, aoypra1, aoyppa2, aoypra2, pred_yppa1, pred_ypra1, pred_yppa2, pred_ypra2, pred_ypplay1, pred_ypplay2, pred_pts1, pred_pts2 = team_matchup(selected_team1,opponent)
-                pts_for_tot = pred_pts1 + pts_for_tot
-                pts_aga_tot = pred_pts2 + pts_aga_tot
-                if (pred_pts1 > pred_pts2):
-                    tot_wins = tot_wins+1
-            else:
-                print('Skipping:', opponent)
-
-        print('Total points for:', pts_for_tot)
-        print('Total points against:', pts_aga_tot)
-        print('Total wins:', tot_wins,'out of',count)
-
-
-
-
+        for team in FBSList:
+            count = count +1
+            pred_season_data = team_season_pred(team, count)
+            rankings[count-1][0] = team
+            rankings[count-1][1] = pred_season_data [0]
+            rankings[count-1][2] = pred_season_data [1]
+            rankings[count-1][3] = pred_season_data [2]
+        with open('rankings.csv',mode='w') as rank_file:
+            rank_writer = csv.writer(rank_file,delimiter=',')
+            rank_writer(rankings)
+        tend = time.time()
+        print('Time elapsed:',tend - tstart)
+#
 
 
 
@@ -358,7 +496,10 @@ while running:
 ##################################################################################
     if option == 99:
         running = False
+        print('\n')
         print('##########################',)
         print('####    Go Gators!!    ###')
         print('##########################',)
+        print('\n')
+        print('\n')
 
