@@ -11,36 +11,61 @@ import time
 ################                     FUNCTIONS                   #################
 ##################################################################################
 ##################################################################################
+def pause():
+    temp_pause = str(input('Paused. Press any key to continue...'))
+
+##################################################################################
+##################################################################################
 def get_data(data_type,selected_team):
+    global team_done, done_teams, get_talent
     if (print_get_data == 1):
         print('\n')
         print('### Getting Data')
-        print('Getting stas for: ', selected_team)
+        print('\n')
+        print('Getting stats for: ', selected_team)
     if data_type == 1:
         if os.path.exists(DataFile):
-            print('### Replacing old file','\n')
+            print('\n')
+            print('### replacing old file','\n')
             os.remove(DataFile)
+        print('\n')
         print('### Importing data')
         url = 'https://api.collegefootballdata.com/games?year=2018&seasonType=regular'
         GameData = wget.download(url, DataFile)
     if data_type == 2:
-        selected_team2 = selected_team.replace(" ","%20")
-        selected_team2 = selected_team2.replace("&","%26")
-        selected_team2 = selected_team2.replace("Jose","Jos%C3%A9")
-        selected_team2 = selected_team2.replace("José","Jos%C3%A9")
-        if os.path.exists(DataFile):
+        if (get_talent == 1):
+            if os.path.exists(TalentFile):
+                print('### Replacing old talent file','\n')
+                os.remove(TalentFile)
+            print('### Getting New Talent file','\n')
+            url = 'https://api.collegefootballdata.com/talent?year=2018'
+            TalentData = wget.download(url,TalentFile)
+            get_talent = 0
+        team_done = selected_team
+        if(selected_team in done_teams):
             if (print_get_data == 1):
-                print('### Replacing old file','\n')
-            os.remove(DataFile)
-        if (print_get_data == 1):
-            print('### Importing data')
-        url = 'https://api.collegefootballdata.com/games/teams?year=2018&seasonType=regular&team='+selected_team2
-        GameData = wget.download(url, DataFile)
+                print('Data aquisition for',team_done,'is being skipped.')
+        else:
+            selected_team2 = selected_team.replace(" ","%20")
+            selected_team2 = selected_team2.replace("&","%26")
+            selected_team2 = selected_team2.replace("Jose","Jos%C3%A9")
+            selected_team2 = selected_team2.replace("José","Jos%C3%A9")
+            if os.path.exists(DataFile):
+                if (print_get_data == 1):
+                    print('### Replacing old file','\n')
+                os.remove(DataFile)
+            if (print_get_data == 1):
+                print('\n')
+                print('### Importing data')
+            url = 'https://api.collegefootballdata.com/games/teams?year=2018&seasonType=regular&team='+selected_team2
+            GameData = wget.download(url, DataFile)
+
 ##################################################################################
 ##################################################################################
 def parse_data(data_type):
-    print('\n')
+    global team_done, done_teams
     if (print_get_data == 1):
+        print('\n')
         print('### Parsing Data')
     if data_type == 1:
         with open(DataFile) as read_tmp1:
@@ -48,19 +73,31 @@ def parse_data(data_type):
             ParsedGameData = read_tmp2  # this is a list of dictionaries
             return ParsedGameData
     if data_type == 2:
-        with open(DataFile) as read_tmp1:
-            read_tmp2 = json.load(read_tmp1)
-            ParsedGameData = read_tmp2  # this is a list of dictionaries
-#            print(type(ParsedGameData))
-#            pp = pprint.PrettyPrinter(indent=4)
-#            pp.pprint(ParsedGameData)
+        if(team_done in done_teams):
+            if (print_get_data == 1):
+                print('Recovering old game data for',team_done)
+            ParsedGameData = done_teams.get(team_done)
+        else:
+             with open(DataFile) as read_tmp1:
+                read_tmp2 = json.load(read_tmp1)
+                ParsedGameData = read_tmp2  # this is a list of dictionaries
+                done_teams[team_done] = ParsedGameData
+        with open(TalentFile) as read_tmp3:
+            read_tmp4 = json.load(read_tmp3)
+            ParsedTalentData = read_tmp4
+#                 for team in ParsedTalentData:
+#                     if (team.get('school') == team_done):
+#                         print(team_done,' talent=', team.get('talent'))
+#                 print(type(ParsedTalentData[1]))
+#                 pp = pprint.PrettyPrinter(indent=4)
+#                 pp.pprint(ParsedTalentData)
 #        for read_tmp3 in ParsedGameData:
 #            pp.pprint(read_tmp3)
-            return ParsedGameData
+        return ParsedGameData, ParsedTalentData
 ##################################################################################
-def get_season_avg(selected_team, ParsedGameData):
+def get_season_avg(selected_team, ParsedGameData, ParsedTalentData):
 #
-    s_stats = [0] * 21
+    s_stats = [0] * 23
     opponent_list = [str('--')] * 21
     tmp6=0
     for tmp1 in ParsedGameData:
@@ -115,6 +152,9 @@ def get_season_avg(selected_team, ParsedGameData):
                             s_stats[15]=s_stats[15]+float(tmp5['stat'])
                         if tmp5['category'] == 'firstDowns':
                             s_stats[17]=s_stats[17]+int(tmp5['stat'])
+    for team in ParsedTalentData:
+        if (team.get('school') == selected_team):
+            s_stats[22] = team.get('talent')
     s_stats[1]=s_stats[1]-1 # Fucking 0-level indexing....
     return s_stats, opponent_list
 ##################################################################################
@@ -135,31 +175,34 @@ def get_opp_adj_data(selected_team):
 #   The second step requires weighing the yards per pass/rush attempt by the number
 #   plays a team runs that is passing/rushing.
 #
-    opp_adj_data = [0] * 7
+    opp_adj_data = [0] * 8
     if (print_get_data == 1):
         print('Selected team = ',selected_team)
     get_data(2,selected_team)
-    ParsedGameData = parse_data(2)
-    s_stats, opp_list = get_season_avg(selected_team, ParsedGameData)
-    opp_stats = numpy.zeros((15,21))
+    ParsedGameData, ParsedTalentData= parse_data(2)
+    s_stats, opp_list = get_season_avg(selected_team, ParsedGameData, ParsedTalentData)
+    opp_stats = numpy.zeros((15,23))
     for x in range(0,s_stats[1]):
         if opp_list[x] != '--':
             selected_team = opp_list[x]
             get_data(2,selected_team)
-            ParsedGameData = parse_data(2)
-            os_stats, o_opp_list = get_season_avg(selected_team, ParsedGameData)
+            ParsedGameData, ParsedTalentData = parse_data(2)
+            os_stats, o_opp_list = get_season_avg(selected_team, ParsedGameData, ParsedTalentData)
             opp_stats[x] = os_stats
         else:
             print("They ain't playyyd nobodyyy PAWWWLL")
 
     oyppa_tot=0
     oypra_tot=0
+    otalent_tot = 0
     o_games_tot=0
     for x in range (0,s_stats[1]):
         oyppa_tot = oyppa_tot + opp_stats[x,12]/opp_stats[x,1]
         oypra_tot = oypra_tot + opp_stats[x,8]/opp_stats[x,1]
+        otalent_tot = otalent_tot + opp_stats[x,22]
     aoyppa = oyppa_tot / s_stats[1]
     aoypra = oypra_tot / s_stats[1]
+    aotalent = otalent_tot / s_stats[1]
 #
     tot_att = s_stats[18]+s_stats[20]  # total number of play attempts
     fra_att_r = s_stats[18] / tot_att  # fraction of plays which are rushing
@@ -172,6 +215,7 @@ def get_opp_adj_data(selected_team):
     opp_adj_data[4] = fra_att_r
     opp_adj_data[5] = fra_att_p
     opp_adj_data[6] = pts_p_a
+    opp_adj_data[7] = aotalent
 
     return s_stats, opp_adj_data
 
@@ -181,6 +225,7 @@ def team_matchup(selected_team1,selected_team2, *args):
 # season average defenses for pass and rush (%) and weigth's the
 # opponent's offense against it.
 #
+        global adjust_for_talent
         which_option = args[0]
         team_matchup_data = [0] * 17
         if (which_option == 1):
@@ -196,6 +241,10 @@ def team_matchup(selected_team1,selected_team2, *args):
         fra_att_r_1 = opp_adj_data1[4]
         fra_att_p_1 = opp_adj_data1[5]
         pts_p_a1 = opp_adj_data1[6]
+        if(adjust_for_talent == 1):
+            aotalent1 = opp_adj_data1[7]
+        else:
+            aotalent1 = 1.0
 
         aoyppa2 = opp_adj_data2[1]
         aoypra2 = opp_adj_data2[2]
@@ -203,6 +252,10 @@ def team_matchup(selected_team1,selected_team2, *args):
         fra_att_r_2 = opp_adj_data2[4]
         fra_att_p_2 = opp_adj_data2[5]
         pts_p_a2 = opp_adj_data2[6]
+        if(adjust_for_talent == 1):
+            aotalent2 = opp_adj_data2[7]
+        else:
+            aotalent2 = 1.0
 
 #
         frac_ra1 = ((s_stats1[9]/s_stats1[1])/aoypra1)  # Rush defense, team 1
@@ -217,8 +270,8 @@ def team_matchup(selected_team1,selected_team2, *args):
 #
         pred_ypplay1 = pred_ypra1 * fra_att_r_1 + pred_yppa1 * fra_att_p_1
         pred_ypplay2 = pred_ypra2 * fra_att_r_2 + pred_yppa2 * fra_att_p_2
-        pred_pts1 = pred_ypplay1 * pts_p_a1
-        pred_pts2 = pred_ypplay2 * pts_p_a2
+        pred_pts1 = pred_ypplay1 * pts_p_a1 * min(1,aotalent1/aotalent2)
+        pred_pts2 = pred_ypplay2 * pts_p_a2 * min(1,aotalent2/aotalent1)
 #
         team_matchup_data[1] = aoyppa1
         team_matchup_data[2] = aoypra1
@@ -258,8 +311,9 @@ def team_season_pred(selected_team1, *args):
         for opponent in FBSList:
             count = count + 1
             if (count == 1):
-                print ('Now Doing Team',count,'/130')
-                print ('team:', selected_team1,'opponent:',opponent)
+                if (print_get_data == 1):
+                    print('\n')
+                    print ('Now Doing:',opponent,'. Team',count,' out of ', len(FBSList))
                 if (selected_team1 != opponent):
                     s_stats1, s_stats2, opp_adj_data1, opp_adj_data2, team_matchup_data = team_matchup(selected_team1,opponent, 1)
                     pred_pts1     =     team_matchup_data[15]
@@ -271,7 +325,9 @@ def team_season_pred(selected_team1, *args):
                 else:
                     print('Skipping:', opponent)
             else:
-                print ('Now Doing Team',count,'/130')
+                if (print_get_data == 1):
+                    print('\n')
+                    print ('Now Doing:',opponent,'. Team',count,' out of ',len(FBSList))
                 if (selected_team1 != opponent):
                     s_stats1, s_stats2, opp_adj_data1, opp_adj_data2, team_matchup_data = team_matchup(selected_team1,opponent, 2, s_stats1, opp_adj_data1)
                     pred_pts1     =     team_matchup_data[15]
@@ -281,7 +337,8 @@ def team_season_pred(selected_team1, *args):
                     if (pred_pts1 > pred_pts2):
                         tot_wins = tot_wins+1
                 else:
-                    print('Skipping:', opponent)
+                    if (print_get_data == 1):
+                        print('Skipping:', opponent)
 #
         pred_season_data[0] = tot_wins
         pred_season_data[1] = pts_for_tot
@@ -296,6 +353,7 @@ now = datetime.datetime.now()
 date = now.strftime("%Y-%m-%d")
 
 DataFile = ('Data_File' + str(date) + '.data')
+TalentFile = ('Talent_File' + str(date) + '.data')
 
 running = True
 # Read user input
@@ -312,7 +370,15 @@ while running:
     print('99: Exit')
     print('##########################','\n')
     option = int(input('Select Option Now:   '))
+# Global variables
     print_get_data = 1
+
+    team_done = 'none'
+    get_talent = 1
+    adjust_for_talent =1
+
+    done_teams = {}
+
 ##################################################################################
     if option == 1:
 #        get_data(1,'Florida')
@@ -322,8 +388,8 @@ while running:
             print('\n','Type "99" to return to main menu','\n')
             TeamName_opt1 = str(input('Enter Team Name:  '))
             if TeamName_opt1 != '99':
-                get_data(1,'TeamName_opt1')
-                ParsedGameData=parse_data(1)
+                get_data(1,TeamName_opt1)
+                ParsedGameData = parse_data(1)
                 for opt1_tmp1 in ParsedGameData:
                  home_team = opt1_tmp1.get("home_team")
                  away_team = opt1_tmp1.get("away_team")
@@ -335,7 +401,7 @@ while running:
     if option == 2:
         TeamName_opt2 = str(input('Enter Team Name:  '))
         get_data(2,TeamName_opt2)
-        ParsedGameData=parse_data(2)
+        ParsedGameData, ParsedTalentData = parse_data(2)
         WhichWeek=1
         for games in ParsedGameData:
             print('##########################','\n')
@@ -346,8 +412,8 @@ while running:
 
         selected_team = str(input('Enter Team Name:  '))
         get_data(2,selected_team)
-        ParsedGameData = parse_data(2)
-        s_stats, opp_list = get_season_avg(selected_team,ParsedGameData)
+        ParsedGameData, ParsedTalentData = parse_data(2)
+        s_stats, opp_list = get_season_avg(selected_team,ParsedGameData,ParsedTalentData)
         print('\n')
         print('##########################','\n')
         print('FBS Opponents Played:')
@@ -377,12 +443,14 @@ while running:
         fra_att_r = opp_adj_data[4]
         fra_att_p = opp_adj_data[5]
         pts_p_a = opp_adj_data[6]
+        aotalent = opp_adj_data[7]
 
-
+        print('\n')
         print('Passing Allowed % =',round((s_stats[13]*100/s_stats[1])/aoyppa,3))
         print('Rushing Allowed % =',round((s_stats[9]*100/s_stats[1])/aoypra,3))
-        print('AVG. Rushing Yards Per Attempt:', round(s_stats[8]/s_stats[1],2), 'AVG. Rushing Yards Per Attempt Allowed:', round(s_stats[9]/s_stats[1],2),'\n')
-        print('AVG. Passing Yards Per Attempt:', round(s_stats[12]/s_stats[1],2), 'AVG. Passinging Yards Per Attempt Allowed:', round(s_stats[13]/s_stats[1],2),'\n')
+        print('AVG. Rushing Yards Per Attempt:', round(s_stats[8]/s_stats[1],2), 'AVG. Rushing Yards Per Attempt Allowed:', round(s_stats[9]/s_stats[1],2))
+        print('AVG. Passing Yards Per Attempt:', round(s_stats[12]/s_stats[1],2), 'AVG. Passinging Yards Per Attempt Allowed:', round(s_stats[13]/s_stats[1],2))
+        print('AVG. Opponent Talent:',round(aotalent,3),'\n')
 
 ##################################################################################
 
@@ -391,6 +459,7 @@ while running:
         print('\n')
         selected_team1 = str(input('Enter Name of Team 1 :  '))
         selected_team2 = str(input('Enter Name of Team 2 :  '))
+        adjust_for_talent = int(input('Adjust for Talent Level? 1 = yes, 0 = no  '))
 
         s_stats1, s_stats2, opp_adj_data1, opp_adj_data2, team_matchup_data = team_matchup(selected_team1,selected_team2,1)
         aoyppa1       =      team_matchup_data[1]
@@ -438,25 +507,32 @@ while running:
         tstart = time.time()
         selected_team1 = str(input('Enter Name of the Team  :  '))
         print_get_data = int(input('Print Intermediate Output? 1 = yes, 0 = no  :  '))
+        adjust_for_talent = int(input('Adjust for Talent Level? 1 = yes, 0 = no  '))
 
-        pred_season_data = team_season_pred(selected_team1, 0)
+        pred_season_data = team_season_pred(selected_team1, 1)
 
         tot_wins = pred_season_data[0]
         pts_for_tot = pred_season_data[1]
         pts_aga_tot = pred_season_data[2]
 
+        print('\n')
+        print('##########################')
         print('Total points for:', pts_for_tot)
         print('Total points against:', pts_aga_tot)
-        print('Total wins:', tot_wins,'out of',129)
+        print('Total wins:', tot_wins)
         tend = time.time()
-        print('Time elapsed:',tend - tstart)
+        print('Time elapsed:',round(tend - tstart, 3), 'seconds')
 
 
 ##################################################################################
     if option == 7:
-        rankings = numpy.zeros( (130, 3) )
+        adjust_for_talent = int(input('Adjust for Talent Level? 1 = yes, 0 = no  '))
+        rows = 150
+        cols = 4
+        rankings = []
+        for row in range(rows): rankings += [[None]*cols]
         tstart = time.time()
-        print_get_data = 1
+        print_get_data = 0
 #
 #       read list of FBS teams from file
         with open('ListOfFBSSchools.csv', 'r') as FBSFile:
@@ -465,22 +541,37 @@ while running:
 # Convert to list of strings
         FBSList = list(map(''.join,FBSList))
 #
+#        rankfile = ('ranking.csv')
+#        if os.path.exists(rankfile):
+#            print('removing rank file')
+#            os.remove(rankfile)
+#
         pts_for_tot = 0
         pts_aga_tot = 0
         tot_wins = 0
         count = 0
-        for team in FBSList:
-            count = count +1
+        index = 0
+        print(len(FBSList))
+        print(FBSList[1])
+        for x in range(2,len(FBSList)):
+            team = FBSList[x]
+            print('\n')
+            print('###############################################################')
+            print('Performing Season Calculations for:', team)
+            print('###############################################################')
+            print('\n')
+            count = count + 1
             pred_season_data = team_season_pred(team, count)
-            rankings[count-1][0] = team
-            rankings[count-1][1] = pred_season_data [0]
-            rankings[count-1][2] = pred_season_data [1]
-            rankings[count-1][3] = pred_season_data [2]
-        with open('rankings.csv',mode='w') as rank_file:
-            rank_writer = csv.writer(rank_file,delimiter=',')
-            rank_writer(rankings)
+            rankings[index][0] = team
+            rankings[index][1] = pred_season_data [0]
+            rankings[index][2] = pred_season_data [1]
+            rankings[index][3] = pred_season_data [2]
+            with open('ranking.csv', 'a') as rank_file:
+                writer = csv.writer(rank_file)
+                writer.writerow(rankings[index])
+            index = index + 1
         tend = time.time()
-        print('Time elapsed:',tend - tstart)
+        print('Time elapsed:',round(tend - tstart, 3), 'seconds')
 #
 
 
